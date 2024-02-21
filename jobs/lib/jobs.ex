@@ -31,12 +31,19 @@
     Calculates the time difference between update and job timestamps.
     """
     def calculate_time_difference(updates) do
-      Enum.map(updates, fn update ->
+      Enum.reduce(updates, %{}, fn update, acc ->
         timestamp = parse_iso8601(update["timestamp"])
-        jobs = Enum.map(update["jobs"], fn job ->
+        Enum.reduce(update["jobs"], acc, fn job, acc ->
+          job_id = job["Id"]
           job_timestamp = parse_iso8601(job["UpdatedAt"])
-          time_difference_in_seconds = NaiveDateTime.diff(job_timestamp,timestamp)
-          {abs(time_difference_in_seconds)}
+          time_difference_in_seconds = abs(NaiveDateTime.diff(job_timestamp, timestamp))
+
+          case Map.get(acc, job_id) do
+            nil -> Map.put(acc, job_id, time_difference_in_seconds)
+            existing_time_difference when existing_time_difference > time_difference_in_seconds ->
+              Map.put(acc, job_id, time_difference_in_seconds)
+            _ -> acc
+          end
         end)
       end)
     end
@@ -48,7 +55,7 @@
       end
     end
 
-    
+
     def format_file(input_file, output_file) do
       input_stream = File.stream!(input_file)
       output_stream = File.open!(output_file, [:write])
@@ -68,12 +75,27 @@
 
       File.close(output_stream)
     end
+    def write_lines_multiples_of_three(input_file, output_file) do
+      input_stream = File.stream!(input_file)
+      output_stream = File.open!(output_file, [:write])
+
+      Enum.with_index(input_stream)
+      |> Enum.each(fn {line, index} ->
+        if rem(index + 1, 3) == 0 do
+          line_with_comma = line <> ","
+          IO.write(output_stream, line_with_comma)
+        end
+      end)
+
+      File.close(output_stream)
+    end
   end
-  # file_path = "final.txt"
-  # {:ok, file_content} = Jobs.read(file_path)
-  # updates = Jason.decode!(file_content)
-  # filtered_updates = Jobs.filter_updates(updates)
-  # IO.inspect(filtered_updates)
-  # time_difference=Jobs.calculate_time_difference(filtered_updates)
-  # IO.inspect(time_difference)
-  Jobs.format_file("v1_jobs_1h.txt","output.txt")
+  file_path = "sample.json"
+  {:ok, file_content} = Jobs.read(file_path)
+  updates = Jason.decode!(file_content)
+  filtered_updates = Jobs.filter_updates(updates)
+  IO.inspect(filtered_updates)
+  time_difference=Jobs.calculate_time_difference(filtered_updates)
+  IO.inspect(time_difference)
+  # Jobs.format_file("v1_jobs_1h.txt","output.txt")
+  # Jobs.write_lines_multiples_of_three("output.txt","final.txt")
